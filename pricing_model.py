@@ -11,14 +11,39 @@ df = pd.read_csv('natgas_R.csv', parse_dates=['Dates'], date_format='%m/%d/%y')
 prices = df['Prices'].values
 dates = df['Dates'].values
 
-# establish start date
+# Calculate days from the start date
 start_date = pd.Timestamp('2020-10-31')
 days_from_start = [(day - start_date).days for day in dates]
 
+# Simple linear regression to fit a model y = Ax + B
+def simple_regression(x, y):
+    xbar = np.mean(x)
+    ybar = np.mean(y)
+    slope = np.sum((x - xbar) * (y - ybar)) / np.sum((x - xbar) ** 2)
+    intercept = ybar - slope * xbar
+    return slope, intercept
+
+time = np.array(days_from_start)
+slope, intercept = simple_regression(time, prices)
+
+# Remove linear trend and apply sinusoidal regression for seasonal pattern
+sin_prices = prices - (time * slope + intercept)
+sin_time = np.sin(time * 2 * np.pi / 365)
+cos_time = np.cos(time * 2 * np.pi / 365)
+
+# Bilinear regression to capture amplitude and phase shift of seasonality
+def bilinear_regression(y, x1, x2):
+    slope1 = np.sum(y * x1) / np.sum(x1 ** 2)
+    slope2 = np.sum(y * x2) / np.sum(x2 ** 2)
+    return slope1, slope2
+
+slope1, slope2 = bilinear_regression(sin_prices, sin_time, cos_time)
+amplitude = np.sqrt(slope1 ** 2 + slope2 ** 2)
+shift = np.arctan2(slope2, slope1)
 
 # Interpolation function
 def interpolate(date):
-    days = (date - pd.Timestamp('2020-10-31')).days
+    days = (date - start_date).days
     if days in days_from_start:
         return prices[days_from_start.index(days)]
     else:
